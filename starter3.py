@@ -10,6 +10,8 @@ import datetime
 from torch.utils.data import DataLoader
 import matplotlib.pyplot as plt
 
+from sklearn.metrics import confusion_matrix, f1_score
+
 def softmax(x):
     exp_x = torch.exp(x - torch.max(x))  # Subtract max for numerical stability
     return exp_x / exp_x.sum(dim=-1, keepdim=True)
@@ -37,7 +39,7 @@ def trainModel(dataset, model, loss_func, optimizer, device):
   train_loss = []
   batch = 0
   now = datetime.datetime.now()
-  
+
   for (y,X) in dataset:
     batch +=1
     X = torch.Tensor(list(X))
@@ -52,7 +54,7 @@ def trainModel(dataset, model, loss_func, optimizer, device):
     loss.backward()
     optimizer.step()
 
-    if batch % 10 == 0:
+    if batch % 100 == 0:
       loss, current = loss.item(), batch * len(X)
       iters = 10 * len(X)
       then = datetime.datetime.now()
@@ -78,6 +80,33 @@ def testModel(dataset, model, loss_func):
   test_loss /= num_batches
   print(f"Avg Loss: {test_loss:>8f}\n")
   return test_loss
+
+def evaluate_model(testDataset, model):
+    # Ensure the model is in evaluation mode
+    model.eval()
+
+    # Lists to store true labels and predictions
+    all_preds = []
+    all_true = []
+
+    with torch.no_grad():
+        for target, data in testDataset:
+            # Move data to the correct device
+            data, target = torch.Tensor(list(data)), torch.Tensor(list(target))
+
+            # Forward pass and get predictions
+            outputs = model(data)
+            _, predicted = torch.max(outputs.data, 0)
+
+            # Append actual and predicted values to lists
+            all_true.append(target.cpu().numpy())
+            all_preds.append(predicted.cpu().numpy())
+
+    # Calculate F1 score and confusion matrix
+    f1 = f1_score(all_true, all_preds, average='weighted')
+    cm = confusion_matrix(all_true, all_preds)
+
+    return f1, cm
 
 
 def read_mnist(file_name):
@@ -145,28 +174,13 @@ def classify_insurability(device):
     feedForwardNN = FFNN(3, 2, 3)
     print(feedForwardNN)
     
-    '''
-    BATCH_SIZE = 1
-    train_loader = DataLoader(train, batch_size=BATCH_SIZE, shuffle=True)
-    test_loader = DataLoader(test, batch_size=BATCH_SIZE, shuffle=True)
-    valid_loader = DataLoader(valid, batch_size=BATCH_SIZE, shuffle=True)
-
-    trainModel(train, feedForwardNN, nn.MSELoss(), torch.optim.SGD(feedForwardNN.parameters(), lr=0.01), device)
-
-    testModel(test, feedForwardNN, nn.MSELoss())
-
-    '''
-    
-
-
-    optimizer = torch.optim.SGD(feedForwardNN.parameters(), lr=0.001)
-    epochs = 50
+    optimizer = torch.optim.SGD(feedForwardNN.parameters(), lr=0.003)
+    epochs = 2
     train_loss = []
     test_loss = []
     for t in range(epochs):
         print(f"Epoch {t+1}\n------------------------------- \n")
-        losses = trainModel(train, feedForwardNN, nn.MSELoss(), optimizer, device)
-        train_loss.append(losses)
+        train_loss.append(trainModel(train, feedForwardNN, nn.MSELoss(), optimizer, device))
         test_loss.append(testModel(valid, feedForwardNN, nn.MSELoss()))
 
     # Could add a condition that interrupts training when the loss doesn't change much
@@ -174,6 +188,12 @@ def classify_insurability(device):
 
     plt.plot([i for i in range(len(train_loss))], torch.tensor(train_loss).mean(axis=1))
     plt.show()
+
+    f1, cm = evaluate_model(test, feedForwardNN)
+    print("F1 score: ", f1)
+    print("\n ----------------------------------------- \n")
+    print("Confusion matrix: \n", cm)
+
 def classify_mnist(device):
     
     train = read_mnist('mnist_train.csv')
