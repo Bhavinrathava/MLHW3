@@ -6,6 +6,79 @@ import torch
 import torch.nn.functional as F
 import torch.nn as nn
 from torch.autograd import Variable
+import datetime
+from torch.utils.data import DataLoader
+import matplotlib.pyplot as plt
+
+def softmax(x):
+    exp_x = torch.exp(x - torch.max(x))  # Subtract max for numerical stability
+    return exp_x / exp_x.sum(dim=-1, keepdim=True)
+class FFNN(nn.Module):
+        
+        def __init__(self, input_size, hidden_size, output_size):
+            super(FFNN, self).__init__()
+            torch.set_default_dtype(torch.float64)
+            self.linear1 = nn.Linear(input_size, hidden_size)
+            self.sigmoid1 = nn.Sigmoid()
+            self.linear2 = nn.Linear(hidden_size, output_size) 
+            self.softmax = softmax
+        def forward(self, x):
+
+            
+            x = self.linear1(x)
+            x = self.sigmoid1(x)
+            x = self.linear2(x)
+            x = self.softmax(x)
+            return x
+        
+
+def trainModel(dataset, model, loss_func, optimizer, device):
+  model.train()
+  train_loss = []
+  batch = 0
+  now = datetime.datetime.now()
+  
+  for (y,X) in dataset:
+    batch +=1
+    X = torch.Tensor(list(X))
+    y = torch.Tensor(list(y))
+    # make some predictions and get the error
+    pred = model(X)
+    loss = loss_func(pred, y.unsqueeze(1))
+
+    # where the magic happens
+    # backpropogation
+    optimizer.zero_grad()
+    loss.backward()
+    optimizer.step()
+
+    if batch % 10 == 0:
+      loss, current = loss.item(), batch * len(X)
+      iters = 10 * len(X)
+      then = datetime.datetime.now()
+      iters /= (then - now).total_seconds()
+      print(f"loss: {loss:>6f} [{current:>5d}/{17000}] ({iters:.1f} its/sec)")
+      now = then
+      train_loss.append(loss)
+
+  return train_loss
+
+
+def testModel(dataset, model, loss_func):
+  num_batches = 0
+  model.eval()
+  test_loss = 0
+
+  with torch.no_grad():
+    for y,X in dataset:
+      X, y = torch.Tensor(list(X)), torch.Tensor(list(y))
+      pred = model(X)
+      test_loss += loss_func(pred, y.unsqueeze(1)).item()
+      num_batches = num_batches + 1
+  test_loss /= num_batches
+  print(f"Avg Loss: {test_loss:>8f}\n")
+  return test_loss
+
 
 def read_mnist(file_name):
     
@@ -61,7 +134,7 @@ def read_insurability(file_name):
             count = count + 1
     return(data)
                
-def classify_insurability():
+def classify_insurability(device):
     
     train = read_insurability('three_train.csv')
     valid = read_insurability('three_valid.csv')
@@ -69,26 +142,58 @@ def classify_insurability():
     
     # insert code to train simple FFNN and produce evaluation metrics
     
-def classify_mnist():
+    feedForwardNN = FFNN(3, 2, 3)
+    print(feedForwardNN)
+    
+    '''
+    BATCH_SIZE = 1
+    train_loader = DataLoader(train, batch_size=BATCH_SIZE, shuffle=True)
+    test_loader = DataLoader(test, batch_size=BATCH_SIZE, shuffle=True)
+    valid_loader = DataLoader(valid, batch_size=BATCH_SIZE, shuffle=True)
+
+    trainModel(train, feedForwardNN, nn.MSELoss(), torch.optim.SGD(feedForwardNN.parameters(), lr=0.01), device)
+
+    testModel(test, feedForwardNN, nn.MSELoss())
+
+    '''
+    
+
+
+    optimizer = torch.optim.SGD(feedForwardNN.parameters(), lr=0.001)
+    epochs = 50
+    train_loss = []
+    test_loss = []
+    for t in range(epochs):
+        print(f"Epoch {t+1}\n------------------------------- \n")
+        losses = trainModel(train, feedForwardNN, nn.MSELoss(), optimizer, device)
+        train_loss.append(losses)
+        test_loss.append(testModel(valid, feedForwardNN, nn.MSELoss()))
+
+    # Could add a condition that interrupts training when the loss doesn't change much
+    print('Done!')
+
+    plt.plot([i for i in range(len(train_loss))], torch.tensor(train_loss).mean(axis=1))
+    plt.show()
+def classify_mnist(device):
     
     train = read_mnist('mnist_train.csv')
     valid = read_mnist('mnist_valid.csv')
     test = read_mnist('mnist_test.csv')
-    show_mnist('mnist_test.csv','pixels')
+    #show_mnist('mnist_test.csv','pixels')
     
     # insert code to train a neural network with an architecture of your choice
     # (a FFNN is fine) and produce evaluation metrics
     
-def classify_mnist_reg():
+def classify_mnist_reg(device):
     
     train = read_mnist('mnist_train.csv')
     valid = read_mnist('mnist_valid.csv')
     test = read_mnist('mnist_test.csv')
-    show_mnist('mnist_test.csv','pixels')
+    #show_mnist('mnist_test.csv','pixels')
     
     # add a regularizer of your choice to classify_mnist()
     
-def classify_insurability_manual():
+def classify_insurability_manual(device):
     
     train = read_insurability('three_train.csv')
     valid = read_insurability('three_valid.csv')
@@ -99,10 +204,11 @@ def classify_insurability_manual():
     
     
 def main():
-    classify_insurability()
-    classify_mnist()
-    classify_mnist_reg()
-    classify_insurability_manual()
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    classify_insurability(device)
+    classify_mnist(device)
+    classify_mnist_reg(device)
+    classify_insurability_manual(device)
     
 if __name__ == "__main__":
     main()
