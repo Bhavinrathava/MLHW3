@@ -46,7 +46,7 @@ def trainModel(dataset, model, loss_func, optimizer, device):
     y = torch.Tensor(list(y))
     # make some predictions and get the error
     pred = model(X)
-    loss = loss_func(pred, y.unsqueeze(1))
+    loss = loss_func(pred.reshape(1,-1), y.type(torch.long))
 
     # where the magic happens
     # backpropogation
@@ -75,7 +75,7 @@ def testModel(dataset, model, loss_func):
     for y,X in dataset:
       X, y = torch.Tensor(list(X)), torch.Tensor(list(y))
       pred = model(X)
-      test_loss += loss_func(pred, y.unsqueeze(1)).item()
+      test_loss += loss_func(pred.reshape(1,-1), y.type(torch.long))
       num_batches = num_batches + 1
   test_loss /= num_batches
   print(f"Avg Loss: {test_loss:>8f}\n")
@@ -174,14 +174,15 @@ def classify_insurability(device):
     feedForwardNN = FFNN(3, 2, 3)
     print(feedForwardNN)
     
-    optimizer = torch.optim.SGD(feedForwardNN.parameters(), lr=0.003)
-    epochs = 2
+    optimizer = torch.optim.SGD(feedForwardNN.parameters(), lr=0.0015)
+    loss = nn.CrossEntropyLoss()
+    epochs = 50
     train_loss = []
     test_loss = []
     for t in range(epochs):
         print(f"Epoch {t+1}\n------------------------------- \n")
-        train_loss.append(trainModel(train, feedForwardNN, nn.MSELoss(), optimizer, device))
-        test_loss.append(testModel(valid, feedForwardNN, nn.MSELoss()))
+        train_loss.append(trainModel(train, feedForwardNN, loss, optimizer, device))
+        test_loss.append(testModel(valid, feedForwardNN, loss))
 
     # Could add a condition that interrupts training when the loss doesn't change much
     print('Done!')
@@ -194,13 +195,61 @@ def classify_insurability(device):
     print("\n ----------------------------------------- \n")
     print("Confusion matrix: \n", cm)
 
+class IrisNet(nn.Module):
+    def __init__(self,in_size,n_hidden1,n_hidden2,out_size,p=0):
+
+        super(IrisNet,self).__init__()
+        self.drop=nn.Dropout(p=p)
+        self.linear1=nn.Linear(in_size,n_hidden1)
+        nn.init.kaiming_uniform_(self.linear1.weight,nonlinearity='relu')
+        self.linear2=nn.Linear(n_hidden1,n_hidden2)
+        nn.init.kaiming_uniform_(self.linear1.weight,nonlinearity='relu')
+        self.linear3=nn.Linear(n_hidden2,n_hidden2)
+        nn.init.kaiming_uniform_(self.linear3.weight,nonlinearity='relu')
+        self.linear4=nn.Linear(n_hidden2,out_size)
+        
+    def forward(self,x):
+        x=F.relu(self.linear1(x))
+        x=self.drop(x)
+        x=F.relu(self.linear2(x))
+        x=self.drop(x)
+        x=F.relu(self.linear3(x))
+        x=self.drop(x)
+        x=self.linear4(x)
+        return x
+    
+
 def classify_mnist(device):
     
     train = read_mnist('mnist_train.csv')
     valid = read_mnist('mnist_valid.csv')
     test = read_mnist('mnist_test.csv')
+
+    # ATTENTION :: CONVERT THE DATA TO INT BEFORE USING IT
     #show_mnist('mnist_test.csv','pixels')
     
+    mnistNetModel = IrisNet(784, 100, 50, 10, p=0)
+
+    optimizer = torch.optim.Adam(mnistNetModel.parameters(), lr=0.003)
+    loss = nn.CrossEntropyLoss()
+    epochs = 10
+    train_loss = []
+    test_loss = []
+    for t in range(epochs):
+        print(f"Epoch {t+1}\n------------------------------- \n")
+        train_loss.append(trainModel(train, mnistNetModel, loss, optimizer, device))
+        test_loss.append(testModel(valid, mnistNetModel, loss))
+
+    # Could add a condition that interrupts training when the loss doesn't change much
+    print('Done!')
+
+    plt.plot([i for i in range(len(train_loss))], torch.tensor(train_loss).mean(axis=1))
+    plt.show()
+
+    f1, cm = evaluate_model(test, mnistNetModel)
+    print("F1 score: ", f1)
+    print("\n ----------------------------------------- \n")
+    print("Confusion matrix: \n", cm)
     # insert code to train a neural network with an architecture of your choice
     # (a FFNN is fine) and produce evaluation metrics
     
@@ -225,7 +274,7 @@ def classify_insurability_manual(device):
     
 def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    classify_insurability(device)
+    #classify_insurability(device)
     classify_mnist(device)
     classify_mnist_reg(device)
     classify_insurability_manual(device)
