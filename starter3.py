@@ -7,10 +7,23 @@ import torch.nn.functional as F
 import torch.nn as nn
 from torch.autograd import Variable
 import datetime
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset
 import matplotlib.pyplot as plt
-
+import seaborn as sns
 from sklearn.metrics import confusion_matrix, f1_score
+class CustomDataset(Dataset):
+    def __init__(self, data):
+        self.data = data
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        features, labels = self.data[idx][1], self.data[idx][0]
+        features_tensor = torch.tensor(features, dtype=torch.float32)
+        labels_tensor = torch.tensor(labels, dtype=torch.long)
+        return features_tensor, labels_tensor.squeeze()
+    
 
 def softmax(x):
     exp_x = torch.exp(x - torch.max(x))  # Subtract max for numerical stability
@@ -19,7 +32,6 @@ class FFNN(nn.Module):
         
         def __init__(self, input_size, hidden_size, output_size):
             super(FFNN, self).__init__()
-            torch.set_default_dtype(torch.float64)
             self.linear1 = nn.Linear(input_size, hidden_size)
             self.sigmoid1 = nn.Sigmoid()
             self.linear2 = nn.Linear(hidden_size, output_size) 
@@ -34,19 +46,15 @@ class FFNN(nn.Module):
             return x
         
 
-def trainModel(dataset, model, loss_func, optimizer, device):
+def trainModel(train_loader, model, loss_func, optimizer, device):
   model.train()
   train_loss = []
-  batch = 0
   now = datetime.datetime.now()
 
-  for (y,X) in dataset:
-    batch +=1
-    X = torch.Tensor(list(X))
-    y = torch.Tensor(list(y))
+  for batch_idx, (features, labels) in enumerate(train_loader):
     # make some predictions and get the error
-    pred = model(X)
-    loss = loss_func(pred.reshape(1,-1), y.type(torch.long))
+    pred = model(features)
+    loss = loss_func(pred, labels)
 
     # where the magic happens
     # backpropogation
@@ -54,59 +62,72 @@ def trainModel(dataset, model, loss_func, optimizer, device):
     loss.backward()
     optimizer.step()
 
-    if batch % 100 == 0:
-      loss, current = loss.item(), batch * len(X)
-      iters = 10 * len(X)
+    if batch_idx % 50 == 0:
+      loss, current = loss.item(), batch_idx * len(features)
+      iters = 10 * len(features)
       then = datetime.datetime.now()
       iters /= (then - now).total_seconds()
       print(f"loss: {loss:>6f} [{current:>5d}/{17000}] ({iters:.1f} its/sec)")
       now = then
       train_loss.append(loss)
 
-  return train_loss
+  return sum(train_loss)/len(train_loss)
 
 
 def testModel(dataset, model, loss_func):
-  num_batches = 0
   model.eval()
   test_loss = 0
-
+  correct = 0
+  predicted_labels = []
+  true_labels = []
   with torch.no_grad():
-    for y,X in dataset:
-      X, y = torch.Tensor(list(X)), torch.Tensor(list(y))
+    for batch_idx, (X, y) in enumerate(dataset):
       pred = model(X)
-      test_loss += loss_func(pred.reshape(1,-1), y.type(torch.long))
-      num_batches = num_batches + 1
-  test_loss /= num_batches
+      test_loss += loss_func(pred, y).item()
+      pred = pred.argmax(dim=1, keepdim=True)
+      correct += pred.eq(y.view_as(pred)).sum().item()
+      true_labels.extend(y.numpy())
+      predicted_labels.extend(pred.numpy())
+  test_loss /= len(dataset.dataset)
+
+  print(f'\Validation set: Average loss: {test_loss:.4f}, Accuracy: {correct}/{len(dataset.dataset)} ({100. * correct / len(dataset.dataset):.0f}%)\n')
   print(f"Avg Loss: {test_loss:>8f}\n")
+
   return test_loss
 
-def evaluate_model(testDataset, model):
-    # Ensure the model is in evaluation mode
+def evaluate_model(testDataset, model,loss_func):
     model.eval()
-
-    # Lists to store true labels and predictions
-    all_preds = []
-    all_true = []
-
+    test_loss = 0
+    correct = 0
+    predicted_labels = []
+    true_labels = []
     with torch.no_grad():
-        for target, data in testDataset:
-            # Move data to the correct device
-            data, target = torch.Tensor(list(data)), torch.Tensor(list(target))
+        for batch_idx, (X, y) in enumerate(testDataset):
+            pred = model(X)
+            test_loss += loss_func(pred, y).item()
+            pred = pred.argmax(dim=1, keepdim=True)
+            correct += pred.eq(y.view_as(pred)).sum().item()
+            true_labels.extend(y.numpy())
+            predicted_labels.extend(pred.numpy())
+    test_loss /= len(testDataset.dataset)
 
-            # Forward pass and get predictions
-            outputs = model(data)
-            _, predicted = torch.max(outputs.data, 0)
-
-            # Append actual and predicted values to lists
-            all_true.append(target.cpu().numpy())
-            all_preds.append(predicted.cpu().numpy())
-
-    # Calculate F1 score and confusion matrix
-    f1 = f1_score(all_true, all_preds, average='weighted')
-    cm = confusion_matrix(all_true, all_preds)
-
-    return f1, cm
+    print(f'\Validation set: Average loss: {test_loss:.4f}, Accuracy: {correct}/{len(testDataset.dataset)} ({100. * correct / len(testDataset.dataset):.0f}%)\n')
+    print(f"Avg Loss: {test_loss:>8f}\n")
+    
+    # Calculate F1 Score
+    f1 = f1_score(true_labels, predicted_labels, average='weighted')
+    print(f'F1 Score: {f1}')
+    print("\n ----------------------------------------- \n")
+    
+    # Calculate confusion matrix
+    cm = confusion_matrix(true_labels, predicted_labels)
+    # Plot confusion matrix
+    plt.figure(figsize=(10, 10))
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
+    plt.ylabel('Actual Labels')
+    plt.xlabel('Predicted Labels')
+    plt.title('Confusion Matrix')
+    plt.show()
 
 
 def read_mnist(file_name):
@@ -169,54 +190,57 @@ def classify_insurability(device):
     valid = read_insurability('three_valid.csv')
     test = read_insurability('three_test.csv')
     
+    train = CustomDataset(train)
+    valid = CustomDataset(valid)
+    test = CustomDataset(test)
+
+
+    batch_size = 1  # Set your batch size
+    train_loader = DataLoader(train, batch_size=batch_size, shuffle=True)
+    valid_loader = DataLoader(valid, batch_size=batch_size, shuffle=True)
+    test_loader = DataLoader(test, batch_size=batch_size, shuffle=True)
     # insert code to train simple FFNN and produce evaluation metrics
     
     feedForwardNN = FFNN(3, 2, 3)
     print(feedForwardNN)
     
-    optimizer = torch.optim.SGD(feedForwardNN.parameters(), lr=0.0015)
+    optimizer = torch.optim.SGD(feedForwardNN.parameters(), lr=0.003)
     loss = nn.CrossEntropyLoss()
     epochs = 50
     train_loss = []
-    test_loss = []
+    validation_loss = []
     for t in range(epochs):
         print(f"Epoch {t+1}\n------------------------------- \n")
-        train_loss.append(trainModel(train, feedForwardNN, loss, optimizer, device))
-        test_loss.append(testModel(valid, feedForwardNN, loss))
+        train_loss.append(trainModel(train_loader, feedForwardNN, loss, optimizer, device))
+        validation_loss.append(testModel(valid_loader, feedForwardNN, loss))
 
     # Could add a condition that interrupts training when the loss doesn't change much
     print('Done!')
 
-    plt.plot([i for i in range(len(train_loss))], torch.tensor(train_loss).mean(axis=1))
+    # Plotting
+    plt.figure(figsize=(10, 5))
+    plt.plot(range(1, epochs+1), train_loss, label='Training Loss')
+    plt.plot(range(1, epochs+1), validation_loss, label='Validation Loss')
+    plt.xlabel('Epochs')
+    plt.ylabel('Loss')
+    plt.title('Training and Testing Loss Over Epochs')
+    plt.legend()
+    plt.show()
     plt.show()
 
-    f1, cm = evaluate_model(test, feedForwardNN)
-    print("F1 score: ", f1)
-    print("\n ----------------------------------------- \n")
-    print("Confusion matrix: \n", cm)
+    evaluate_model(test_loader, feedForwardNN, loss)
 
 class IrisNet(nn.Module):
-    def __init__(self,in_size,n_hidden1,n_hidden2,out_size,p=0):
-
+    def __init__(self):
         super(IrisNet,self).__init__()
-        self.drop=nn.Dropout(p=p)
-        self.linear1=nn.Linear(in_size,n_hidden1)
-        nn.init.kaiming_uniform_(self.linear1.weight,nonlinearity='relu')
-        self.linear2=nn.Linear(n_hidden1,n_hidden2)
-        nn.init.kaiming_uniform_(self.linear1.weight,nonlinearity='relu')
-        self.linear3=nn.Linear(n_hidden2,n_hidden2)
-        nn.init.kaiming_uniform_(self.linear3.weight,nonlinearity='relu')
-        self.linear4=nn.Linear(n_hidden2,out_size)
-        
-    def forward(self,x):
-        x=F.relu(self.linear1(x))
-        x=self.drop(x)
-        x=F.relu(self.linear2(x))
-        x=self.drop(x)
-        x=F.relu(self.linear3(x))
-        x=self.drop(x)
-        x=self.linear4(x)
-        return x
+        self.fc1 = nn.Linear(28 * 28, 128)  # Flatten the image and then apply linear transformation
+        self.fc2 = nn.Linear(128, 10)
+
+    def forward(self, x):
+        x = x.view(-1, 28*28)  # Flatten the image
+        x = F.relu(self.fc1(x))
+        x = self.fc2(x)
+        return softmax(x)
     
 
 def classify_mnist(device):
@@ -228,11 +252,11 @@ def classify_mnist(device):
     # ATTENTION :: CONVERT THE DATA TO INT BEFORE USING IT
     #show_mnist('mnist_test.csv','pixels')
     
-    mnistNetModel = IrisNet(784, 100, 50, 10, p=0)
+    mnistNetModel = IrisNet()
 
-    optimizer = torch.optim.Adam(mnistNetModel.parameters(), lr=0.003)
+    optimizer = torch.optim.Adam(mnistNetModel.parameters(), lr=0.00005)
     loss = nn.CrossEntropyLoss()
-    epochs = 10
+    epochs = 50
     train_loss = []
     test_loss = []
     for t in range(epochs):
@@ -243,7 +267,7 @@ def classify_mnist(device):
     # Could add a condition that interrupts training when the loss doesn't change much
     print('Done!')
 
-    plt.plot([i for i in range(len(train_loss))], torch.tensor(train_loss).mean(axis=1))
+    plt.plot([i for i in range(len(test_loss))], torch.tensor(test_loss).mean(axis=1))
     plt.show()
 
     f1, cm = evaluate_model(test, mnistNetModel)
@@ -274,10 +298,10 @@ def classify_insurability_manual(device):
     
 def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    #classify_insurability(device)
-    classify_mnist(device)
-    classify_mnist_reg(device)
-    classify_insurability_manual(device)
+    classify_insurability(device)
+    #classify_mnist(device)
+    #classify_mnist_reg(device)
+    #classify_insurability_manual(device)
     
 if __name__ == "__main__":
     main()
