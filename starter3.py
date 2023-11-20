@@ -24,6 +24,20 @@ class CustomDataset(Dataset):
         labels_tensor = torch.tensor(labels, dtype=torch.long)
         return features_tensor, labels_tensor.squeeze()
     
+class CustomIrisDataset(Dataset):
+    def __init__(self, data):
+        self.data = data
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        features, labels = self.data[idx][1], self.data[idx][0]
+        features = [int(x) for x in features]
+        labels = int(labels)
+        features_tensor = torch.tensor(features, dtype=torch.float32)
+        labels_tensor = torch.tensor(labels, dtype=torch.long)
+        return features_tensor, labels_tensor.squeeze()
 
 def softmax(x):
     exp_x = torch.exp(x - torch.max(x))  # Subtract max for numerical stability
@@ -90,7 +104,7 @@ def testModel(dataset, model, loss_func):
       predicted_labels.extend(pred.numpy())
   test_loss /= len(dataset.dataset)
 
-  print(f'\Validation set: Average loss: {test_loss:.4f}, Accuracy: {correct}/{len(dataset.dataset)} ({100. * correct / len(dataset.dataset):.0f}%)\n')
+  print(f'Validation set: Average loss: {test_loss:.4f}, Accuracy: {correct}/{len(dataset.dataset)} ({100. * correct / len(dataset.dataset):.0f}%)\n')
   print(f"Avg Loss: {test_loss:>8f}\n")
 
   return test_loss
@@ -111,7 +125,7 @@ def evaluate_model(testDataset, model,loss_func):
             predicted_labels.extend(pred.numpy())
     test_loss /= len(testDataset.dataset)
 
-    print(f'\Validation set: Average loss: {test_loss:.4f}, Accuracy: {correct}/{len(testDataset.dataset)} ({100. * correct / len(testDataset.dataset):.0f}%)\n')
+    print(f'Test set: Average loss: {test_loss:.4f}, Accuracy: {correct}/{len(testDataset.dataset)} ({100. * correct / len(testDataset.dataset):.0f}%)\n')
     print(f"Avg Loss: {test_loss:>8f}\n")
     
     # Calculate F1 Score
@@ -233,13 +247,17 @@ def classify_insurability(device):
 class IrisNet(nn.Module):
     def __init__(self):
         super(IrisNet,self).__init__()
-        self.fc1 = nn.Linear(28 * 28, 128)  # Flatten the image and then apply linear transformation
-        self.fc2 = nn.Linear(128, 10)
+        self.fc1 = nn.Linear(28 * 28, 64)
+        self.fc2 = nn.Linear(64, 128)
+        self.fc3 = nn.Linear(128,64)  # Flatten the image and then apply linear transformation
+        self.fc4 = nn.Linear(64, 10)
 
     def forward(self, x):
         x = x.view(-1, 28*28)  # Flatten the image
         x = F.relu(self.fc1(x))
-        x = self.fc2(x)
+        x = F.relu(self.fc2(x))
+        x = F.relu(self.fc3(x))
+        x = self.fc4(x)
         return softmax(x)
     
 
@@ -249,33 +267,46 @@ def classify_mnist(device):
     valid = read_mnist('mnist_valid.csv')
     test = read_mnist('mnist_test.csv')
 
+    train = CustomIrisDataset(train)
+    valid = CustomIrisDataset(valid)
+    test = CustomIrisDataset(test)
+
+
+    batch_size = 64  # Set your batch size
+    train_loader = DataLoader(train, batch_size=batch_size, shuffle=True)
+    valid_loader = DataLoader(valid, batch_size=batch_size, shuffle=True)
+    test_loader = DataLoader(test, batch_size=batch_size, shuffle=True)
+
     # ATTENTION :: CONVERT THE DATA TO INT BEFORE USING IT
     #show_mnist('mnist_test.csv','pixels')
     
     mnistNetModel = IrisNet()
 
-    optimizer = torch.optim.Adam(mnistNetModel.parameters(), lr=0.00005)
+    optimizer = torch.optim.Adam(mnistNetModel.parameters(), lr=0.0003)
     loss = nn.CrossEntropyLoss()
-    epochs = 50
+    epochs = 20
     train_loss = []
-    test_loss = []
+    validation_loss = []
     for t in range(epochs):
         print(f"Epoch {t+1}\n------------------------------- \n")
-        train_loss.append(trainModel(train, mnistNetModel, loss, optimizer, device))
-        test_loss.append(testModel(valid, mnistNetModel, loss))
+        train_loss.append(trainModel(train_loader, mnistNetModel, loss, optimizer, device))
+        validation_loss.append(testModel(valid_loader, mnistNetModel, loss))
 
     # Could add a condition that interrupts training when the loss doesn't change much
     print('Done!')
 
-    plt.plot([i for i in range(len(test_loss))], torch.tensor(test_loss).mean(axis=1))
+    # Plotting
+    plt.figure(figsize=(10, 5))
+    plt.plot(range(1, epochs+1), train_loss, label='Training Loss')
+    plt.plot(range(1, epochs+1), validation_loss, label='Validation Loss')
+    plt.xlabel('Epochs')
+    plt.ylabel('Loss')
+    plt.title('Training and Testing Loss Over Epochs')
+    plt.legend()
+    plt.show()
     plt.show()
 
-    f1, cm = evaluate_model(test, mnistNetModel)
-    print("F1 score: ", f1)
-    print("\n ----------------------------------------- \n")
-    print("Confusion matrix: \n", cm)
-    # insert code to train a neural network with an architecture of your choice
-    # (a FFNN is fine) and produce evaluation metrics
+    evaluate_model(test_loader, mnistNetModel, loss)
     
 def classify_mnist_reg(device):
     
@@ -298,8 +329,8 @@ def classify_insurability_manual(device):
     
 def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    classify_insurability(device)
-    #classify_mnist(device)
+    #classify_insurability(device)
+    classify_mnist(device)
     #classify_mnist_reg(device)
     #classify_insurability_manual(device)
     
