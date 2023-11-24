@@ -11,6 +11,7 @@ from torch.utils.data import DataLoader, Dataset
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.metrics import confusion_matrix, f1_score
+
 class CustomDataset(Dataset):
     def __init__(self, data):
         self.data = data
@@ -24,7 +25,7 @@ class CustomDataset(Dataset):
         labels_tensor = torch.tensor(labels, dtype=torch.long)
         return features_tensor, labels_tensor.squeeze()
     
-class CustomIrisDataset(Dataset):
+class CustomMnistDataset(Dataset):
     def __init__(self, data):
         self.data = data
 
@@ -255,9 +256,9 @@ def classify_insurability(device,preprocess=False, early_stopping=True):
     return evaluate_model(test_loader, feedForwardNN, loss)
 
 
-class IrisNet(nn.Module):
+class MnistNet(nn.Module):
     def __init__(self):
-        super(IrisNet,self).__init__()
+        super(MnistNet,self).__init__()
         self.fc1 = nn.Linear(28 * 28, 64)
         self.fc2 = nn.Linear(64, 128)
         self.fc3 = nn.Linear(128,64)  # Flatten the image and then apply linear transformation
@@ -329,9 +330,9 @@ def classify_mnist(device):
     valid = processDataMNIST('mnist_valid.csv')
     test = processDataMNIST('mnist_test.csv')
 
-    train = CustomIrisDataset(train)
-    valid = CustomIrisDataset(valid)
-    test = CustomIrisDataset(test)
+    train = CustomMnistDataset(train)
+    valid = CustomMnistDataset(valid)
+    test = CustomMnistDataset(test)
 
 
     batch_size = 64  # Set your batch size
@@ -371,14 +372,45 @@ def classify_mnist(device):
     return evaluate_model(test_loader, mnistNetModel, loss)
     
 def classify_mnist_reg(device):
-    
     train = read_mnist('mnist_train.csv')
     valid = read_mnist('mnist_valid.csv')
     test = read_mnist('mnist_test.csv')
-    #show_mnist('mnist_test.csv','pixels')
+
+    train = CustomMnistDataset(train)
+    valid = CustomMnistDataset(valid)
+    test = CustomMnistDataset(test)
+
+    batch_size = 64
+    train_loader = DataLoader(train, batch_size=batch_size, shuffle=True)
+    valid_loader = DataLoader(valid, batch_size=batch_size, shuffle=True)
+    test_loader = DataLoader(test, batch_size=batch_size, shuffle=True)
     
-    # add a regularizer of your choice to classify_mnist()
-    
+    mnistNetModel = MnistNet()
+
+    # Adding L2 Regularization using weight_decay
+    optimizer = torch.optim.Adam(mnistNetModel.parameters(), lr=0.0003, weight_decay=0.01)
+    loss = nn.CrossEntropyLoss()
+    epochs = 20
+    train_loss = []
+    validation_loss = []
+    for t in range(epochs):
+        print(f"Epoch {t+1}\n------------------------------- \n")
+        train_loss.append(trainModel(train_loader, mnistNetModel, loss, optimizer, device))
+        validation_loss.append(testModel(valid_loader, mnistNetModel, loss))
+
+    # Could add a condition that interrupts training when the loss doesn't change much# Plotting
+    plt.figure(figsize=(10, 5))
+    plt.plot(range(1, epochs+1), train_loss, label='Training Loss')
+    plt.plot(range(1, epochs+1), validation_loss, label='Validation Loss')
+    plt.xlabel('Epochs')
+    plt.ylabel('Loss')
+    plt.title('Training and Testing Loss Over Epochs')
+    plt.legend()
+    plt.show()
+    plt.show()
+
+    evaluate_model(test_loader, mnistNetModel, loss)
+
 def classify_insurability_manual(device):
     
     train = read_insurability('three_train.csv')
