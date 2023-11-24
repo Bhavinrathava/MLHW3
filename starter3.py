@@ -42,6 +42,36 @@ class CustomIrisDataset(Dataset):
 def softmax(x):
     exp_x = torch.exp(x - torch.max(x))  # Subtract max for numerical stability
     return exp_x / exp_x.sum(dim=-1, keepdim=True)
+
+def preprocess_data(data):
+    # Preprocessing the Insurance data
+    print(data[0])
+    min_x1 = min_x2 = min_x3 = 100000
+    max_x1 = max_x2 = max_x3 = -100000
+
+    for row in data:
+        features = row[1]
+        min_x1 = min(min_x1, features[0])
+        min_x2 = min(min_x2, features[1])
+        min_x3 = min(min_x3, features[2])
+
+        max_x1 = max(max_x1, features[0])
+        max_x2 = max(max_x2, features[1])
+        max_x3 = max(max_x3, features[2])
+
+    for row in data:
+        features = row[1]
+        features[0] -= min_x1
+        features[0] /= (max_x1 - min_x1)
+
+        features[1] -= min_x2
+        features[1] /= (max_x2 - min_x2)
+
+        features[2] -= min_x3
+        features[2] /= (max_x3 - min_x3)
+        row[1] = features
+    return 
+
 class FFNN(nn.Module):
         
         def __init__(self, input_size, hidden_size, output_size):
@@ -204,6 +234,10 @@ def classify_insurability(device):
     valid = read_insurability('three_valid.csv')
     test = read_insurability('three_test.csv')
     
+    preprocess_data(train)
+    preprocess_data(valid)
+    preprocess_data(test)
+
     train = CustomDataset(train)
     valid = CustomDataset(valid)
     test = CustomDataset(test)
@@ -218,9 +252,9 @@ def classify_insurability(device):
     feedForwardNN = FFNN(3, 2, 3)
     print(feedForwardNN)
     
-    optimizer = torch.optim.SGD(feedForwardNN.parameters(), lr=0.003)
+    optimizer = torch.optim.SGD(feedForwardNN.parameters(), lr=0.05)
     loss = nn.CrossEntropyLoss()
-    epochs = 50
+    epochs = 20
     train_loss = []
     validation_loss = []
     for t in range(epochs):
@@ -329,8 +363,8 @@ def classify_insurability_manual(device):
     
 def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    #classify_insurability(device)
-    classify_mnist(device)
+    classify_insurability(device)
+    #classify_mnist(device)
     #classify_mnist_reg(device)
     #classify_insurability_manual(device)
     
