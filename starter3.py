@@ -352,7 +352,7 @@ def classify_mnist(device):
     for t in range(epochs):
         #print(f"Epoch {t+1}\n------------------------------- \n")
         train_loss.append(trainModel(train_loader, mnistNetModel, loss, optimizer, device))
-        validation_loss.append(testModel(valid_loader, mnistNetModel, loss))
+        validation_loss.append(testModel(valid_loader, mnistNetModel, loss)[0])
 
     # Could add a condition that interrupts training when the loss doesn't change much
     #print('Done!')
@@ -368,7 +368,7 @@ def classify_mnist(device):
     plt.show()
     plt.show()
 
-    evaluate_model(test_loader, mnistNetModel, loss)
+    return evaluate_model(test_loader, mnistNetModel, loss)
     
 def classify_mnist_reg(device):
     
@@ -402,9 +402,11 @@ def main():
     testloss, testAccuracy = classify_insurability(device,preprocess=False, early_stopping=False)
     print("For Insurable Data \n Test Loss: ", testloss, "\n Test Accuracy: ", testAccuracy, "\n Preprocessing: False \n Early Stopping: False \n")
 
-    #classify_mnist(device)
-    #classify_mnist_reg(device)
-    #classify_insurability_manual(device)
+    test_loss, acc = classify_mnist(device)
+    print("For Mnist Data \n Test Loss: ", test_loss, "\n Test Accuracy: ", acc)
+    
+    classify_mnist_reg(device)
+    classify_insurability_manual(device)
     
 if __name__ == "__main__":
     main()
