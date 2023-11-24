@@ -220,7 +220,7 @@ def classify_insurability(device):
     feedForwardNN = FFNN(3, 2, 3)
     print(feedForwardNN)
     
-    optimizer = torch.optim.SGD(feedForwardNN.parameters(), lr=0.003)
+    optimizer = torch.optim.SGD(feedForwardNN.parameters(), lr=0.3)
     loss = nn.CrossEntropyLoss()
     epochs = 50
     train_loss = []
@@ -267,11 +267,11 @@ def classify_insurability_learning_rate_decay(device):
     feedForwardNN = FFNN(3, 2, 3)
     print(feedForwardNN)
     
-    #optimizer = torch.optim.SGD(feedForwardNN.parameters(), lr=0.1)
-    optimizer = torch.optim.Adam(feedForwardNN.parameters(), lr=0.001)
+    optimizer = torch.optim.SGD(feedForwardNN.parameters(), lr=0.1)
+    #optimizer = torch.optim.Adam(feedForwardNN.parameters(), lr=0.001)
     # Adding learning rate decay
-    #scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=5, factor=0.3, min_lr=0.0001)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
+    #scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=5, factor=0.3, min_lr=0.0001)
     loss = nn.CrossEntropyLoss()
     epochs = 50
     train_loss = []
@@ -281,12 +281,12 @@ def classify_insurability_learning_rate_decay(device):
     for t in range(epochs):
         print(f"Epoch {t+1}\n------------------------------- \n")
         train_loss.append(trainModel(train_loader, feedForwardNN, loss, optimizer, device))
-        optimizer.step()
+        #optimizer.step()
         valid_loss, accuracy = testModel(valid_loader, feedForwardNN, loss)
         validation_loss.append(valid_loss)
         accuracies.append(accuracy)
 
-        scheduler.step(valid_loss) # Update learning rate
+        scheduler.step() # Update learning rate
         # Tracking learning rate and accuracy
         current_lr = scheduler.optimizer.param_groups[0]['lr']
         learning_rates.append(current_lr)
@@ -437,9 +437,9 @@ def classify_insurability_manual(device):
 def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     #classify_insurability(device)
-    classify_insurability_learning_rate_decay(device)
+    #classify_insurability_learning_rate_decay(device)
     #classify_mnist(device)
-    #classify_mnist_reg(device)
+    classify_mnist_reg(device)
     #classify_insurability_manual(device)
     
 if __name__ == "__main__":
