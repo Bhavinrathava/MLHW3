@@ -322,18 +322,17 @@ def show_mnist(file_name,mode):
 
 def classify_mnist(device):
     
-    train = read_mnist('mnist_train.csv')
-    valid = read_mnist('mnist_valid.csv')
-    test = read_mnist('mnist_test.csv')
+    train_data = read_mnist('mnist_train.csv')
+    valid_data = read_mnist('mnist_valid.csv')
+    test_data = read_mnist('mnist_test.csv')
 
-    train = processDataMNIST('mnist_train.csv')
-    valid = processDataMNIST('mnist_valid.csv')
-    test = processDataMNIST('mnist_test.csv')
+    train_features, train_labels = processDataMNIST(train_data)
+    valid_features, valid_labels = processDataMNIST(valid_data)
+    test_features, test_labels = processDataMNIST(test_data)
 
-    train = CustomMnistDataset(train)
-    valid = CustomMnistDataset(valid)
-    test = CustomMnistDataset(test)
-
+    train = CustomMnistDataset(list(zip(train_labels, train_features)))
+    valid = CustomMnistDataset(list(zip(valid_labels, valid_features)))
+    test = CustomMnistDataset(list(zip(test_labels, test_features)))
 
     batch_size = 64  # Set your batch size
     train_loader = DataLoader(train, batch_size=batch_size, shuffle=True)
@@ -343,7 +342,7 @@ def classify_mnist(device):
     # ATTENTION :: CONVERT THE DATA TO INT BEFORE USING IT
     #show_mnist('mnist_test.csv','pixels')
     
-    mnistNetModel = IrisNet()
+    mnistNetModel = MnistNet()
 
     optimizer = torch.optim.Adam(mnistNetModel.parameters(), lr=0.0003)
     loss = nn.CrossEntropyLoss()
@@ -396,7 +395,7 @@ def classify_mnist_reg(device):
     for t in range(epochs):
         print(f"Epoch {t+1}\n------------------------------- \n")
         train_loss.append(trainModel(train_loader, mnistNetModel, loss, optimizer, device))
-        validation_loss.append(testModel(valid_loader, mnistNetModel, loss))
+        validation_loss.append(testModel(valid_loader, mnistNetModel, loss)[0])
 
     # Could add a condition that interrupts training when the loss doesn't change much# Plotting
     plt.figure(figsize=(10, 5))
