@@ -346,7 +346,7 @@ def classify_mnist(device):
 
     optimizer = torch.optim.Adam(mnistNetModel.parameters(), lr=0.0003)
     loss = nn.CrossEntropyLoss()
-    epochs = 20
+    epochs = 50
     train_loss = []
     validation_loss = []
     for t in range(epochs):
@@ -421,6 +421,7 @@ def classify_insurability_manual(device):
     
 def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
+    
     testloss , testAccuracy = classify_insurability(device,preprocess=True, early_stopping=True)
     print("For Insurable Data \n Test Loss: ", testloss, "\n Test Accuracy: ", testAccuracy, "\n Preprocessing: True \n Early Stopping: True \n")
 
