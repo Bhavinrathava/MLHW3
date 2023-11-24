@@ -410,6 +410,77 @@ def classify_mnist_reg(device):
 
     evaluate_model(test_loader, mnistNetModel, loss)
 
+def classify_insurability_learning_rate_decay(device):
+
+    train = read_insurability('three_train.csv')
+    valid = read_insurability('three_valid.csv')
+    test = read_insurability('three_test.csv')
+
+    train = CustomDataset(train)
+    valid = CustomDataset(valid)
+    test = CustomDataset(test)
+
+
+    batch_size = 1  # Set your batch size
+    train_loader = DataLoader(train, batch_size=batch_size, shuffle=True)
+    valid_loader = DataLoader(valid, batch_size=batch_size, shuffle=True)
+    test_loader = DataLoader(test, batch_size=batch_size, shuffle=True)
+    # insert code to train simple FFNN and produce evaluation metrics
+
+    feedForwardNN = FFNN(3, 2, 3)
+    print(feedForwardNN)
+
+    optimizer = torch.optim.SGD(feedForwardNN.parameters(), lr=0.1)
+    #optimizer = torch.optim.Adam(feedForwardNN.parameters(), lr=0.001)
+    # Adding learning rate decay
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
+    #scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=5, factor=0.3, min_lr=0.0001)
+    loss = nn.CrossEntropyLoss()
+    epochs = 50
+    train_loss = []
+    validation_loss = []
+    accuracies = []
+    learning_rates = []
+    for t in range(epochs):
+        print(f"Epoch {t+1}\n------------------------------- \n")
+        train_loss.append(trainModel(train_loader, feedForwardNN, loss, optimizer, device))
+        #optimizer.step()
+        valid_loss, accuracy = testModel(valid_loader, feedForwardNN, loss)
+        validation_loss.append(valid_loss)
+        accuracies.append(accuracy)
+
+        scheduler.step() # Update learning rate
+        # Tracking learning rate and accuracy
+        current_lr = scheduler.optimizer.param_groups[0]['lr']
+        learning_rates.append(current_lr)
+
+    # Could add a condition that interrupts training when the loss doesn't change much
+    print('Done!')
+
+    # Plotting loss
+    plt.figure(figsize=(10, 5))
+    plt.plot(range(1, epochs+1), train_loss, label='Training Loss')
+    plt.plot(range(1, epochs+1), validation_loss, label='Validation Loss')
+    plt.xlabel('Epochs')
+    plt.ylabel('Loss')
+    plt.title('Training and Testing Loss Over Epochs')
+    plt.legend()
+    plt.show()
+    plt.show()
+
+    # Plotting accuracy
+    plt.figure(figsize=(10, 5))
+    plt.plot(learning_rates, accuracies, label='Accuracy vs Learning Rate', marker='o')
+    plt.title('Accuracy vs. Learning Rate')
+    plt.xlabel('Learning Rate')
+    plt.ylabel('Accuracy')
+    plt.legend()
+    plt.show()
+
+    # Final evaluation
+    evaluate_model(test_loader, feedForwardNN, loss)
+
+
 def classify_insurability_manual(device):
     
     train = read_insurability('three_train.csv')
@@ -440,5 +511,6 @@ def main():
     classify_mnist_reg(device)
     classify_insurability_manual(device)
     
+    classify_insurability_learning_rate_decay(device)
 if __name__ == "__main__":
     main()
