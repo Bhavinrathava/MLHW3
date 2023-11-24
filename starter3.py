@@ -273,7 +273,7 @@ def classify_insurability_learning_rate_decay(device):
     #scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=5, factor=0.3, min_lr=0.0001)
     loss = nn.CrossEntropyLoss()
-    epochs = 100
+    epochs = 50
     train_loss = []
     validation_loss = []
     accuracies = []
