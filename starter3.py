@@ -45,7 +45,6 @@ def softmax(x):
 
 def preprocess_data(data):
     # Preprocessing the Insurance data
-    print(data[0])
     min_x1 = min_x2 = min_x3 = 100000
     max_x1 = max_x2 = max_x3 = -100000
 
@@ -111,7 +110,7 @@ def trainModel(train_loader, model, loss_func, optimizer, device):
       iters = 10 * len(features)
       then = datetime.datetime.now()
       iters /= (then - now).total_seconds()
-      print(f"loss: {loss:>6f} [{current:>5d}/{17000}] ({iters:.1f} its/sec)")
+      #print(f"loss: {loss:>6f} [{current:>5d}/{17000}] ({iters:.1f} its/sec)")
       now = then
       train_loss.append(loss)
 
@@ -134,10 +133,10 @@ def testModel(dataset, model, loss_func):
       predicted_labels.extend(pred.numpy())
   test_loss /= len(dataset.dataset)
 
-  print(f'Validation set: Average loss: {test_loss:.4f}, Accuracy: {correct}/{len(dataset.dataset)} ({100. * correct / len(dataset.dataset):.0f}%)\n')
-  print(f"Avg Loss: {test_loss:>8f}\n")
+  #print(f'Validation set: Average loss: {test_loss:.4f}, Accuracy: {correct}/{len(dataset.dataset)} ({100. * correct / len(dataset.dataset):.0f}%)\n')
+  #print(f"Avg Loss: {test_loss:>8f}\n")
 
-  return test_loss
+  return test_loss, 100. * correct / len(dataset.dataset)
 
 def evaluate_model(testDataset, model,loss_func):
     model.eval()
@@ -155,13 +154,13 @@ def evaluate_model(testDataset, model,loss_func):
             predicted_labels.extend(pred.numpy())
     test_loss /= len(testDataset.dataset)
 
-    print(f'Test set: Average loss: {test_loss:.4f}, Accuracy: {correct}/{len(testDataset.dataset)} ({100. * correct / len(testDataset.dataset):.0f}%)\n')
-    print(f"Avg Loss: {test_loss:>8f}\n")
+    #print(f'Test set: Average loss: {test_loss:.4f}, Accuracy: {correct}/{len(testDataset.dataset)} ({100. * correct / len(testDataset.dataset):.0f}%)\n')
+    #print(f"Avg Loss: {test_loss:>8f}\n")
     
     # Calculate F1 Score
     f1 = f1_score(true_labels, predicted_labels, average='weighted')
-    print(f'F1 Score: {f1}')
-    print("\n ----------------------------------------- \n")
+    #print(f'F1 Score: {f1}')
+    #print("\n ----------------------------------------- \n")
     
     # Calculate confusion matrix
     cm = confusion_matrix(true_labels, predicted_labels)
@@ -172,6 +171,8 @@ def evaluate_model(testDataset, model,loss_func):
     plt.xlabel('Predicted Labels')
     plt.title('Confusion Matrix')
     plt.show()
+
+    return test_loss, 100. * correct / len(testDataset.dataset)
 
 
 def read_mnist(file_name):
@@ -228,15 +229,21 @@ def read_insurability(file_name):
             count = count + 1
     return(data)
                
-def classify_insurability(device):
+def classify_insurability(device,preprocess=False, early_stopping=True):
     
     train = read_insurability('three_train.csv')
     valid = read_insurability('three_valid.csv')
     test = read_insurability('three_test.csv')
     
-    preprocess_data(train)
-    preprocess_data(valid)
-    preprocess_data(test)
+    epochs = 50
+    LR = 0.05
+
+    if(preprocess):
+        preprocess_data(train)
+        preprocess_data(valid)
+        preprocess_data(test)
+        epochs = 20
+        LR = 0.05
 
     train = CustomDataset(train)
     valid = CustomDataset(valid)
@@ -250,25 +257,28 @@ def classify_insurability(device):
     # insert code to train simple FFNN and produce evaluation metrics
     
     feedForwardNN = FFNN(3, 2, 3)
-    print(feedForwardNN)
+    #print(feedForwardNN)
     
-    optimizer = torch.optim.SGD(feedForwardNN.parameters(), lr=0.05)
+    optimizer = torch.optim.SGD(feedForwardNN.parameters(), lr=LR)
     loss = nn.CrossEntropyLoss()
-    epochs = 20
     train_loss = []
     validation_loss = []
     for t in range(epochs):
-        print(f"Epoch {t+1}\n------------------------------- \n")
+        #print(f"Epoch {t+1}\n------------------------------- \n")
         train_loss.append(trainModel(train_loader, feedForwardNN, loss, optimizer, device))
-        validation_loss.append(testModel(valid_loader, feedForwardNN, loss))
+        testData = testModel(valid_loader, feedForwardNN, loss)
+        validation_loss.append(testData[0])
+
+        if(early_stopping and testData[1] >= 84):
+            break
 
     # Could add a condition that interrupts training when the loss doesn't change much
-    print('Done!')
+    #print('Done!')
 
     # Plotting
     plt.figure(figsize=(10, 5))
-    plt.plot(range(1, epochs+1), train_loss, label='Training Loss')
-    plt.plot(range(1, epochs+1), validation_loss, label='Validation Loss')
+    plt.plot(range(1, len(train_loss)+1), train_loss, label='Training Loss')
+    plt.plot(range(1, len(validation_loss)+1), validation_loss, label='Validation Loss')
     plt.xlabel('Epochs')
     plt.ylabel('Loss')
     plt.title('Training and Testing Loss Over Epochs')
@@ -276,7 +286,7 @@ def classify_insurability(device):
     plt.show()
     plt.show()
 
-    evaluate_model(test_loader, feedForwardNN, loss)
+    return evaluate_model(test_loader, feedForwardNN, loss)
 
 class IrisNet(nn.Module):
     def __init__(self):
@@ -322,12 +332,12 @@ def classify_mnist(device):
     train_loss = []
     validation_loss = []
     for t in range(epochs):
-        print(f"Epoch {t+1}\n------------------------------- \n")
+        #print(f"Epoch {t+1}\n------------------------------- \n")
         train_loss.append(trainModel(train_loader, mnistNetModel, loss, optimizer, device))
         validation_loss.append(testModel(valid_loader, mnistNetModel, loss))
 
     # Could add a condition that interrupts training when the loss doesn't change much
-    print('Done!')
+    #print('Done!')
 
     # Plotting
     plt.figure(figsize=(10, 5))
@@ -363,7 +373,18 @@ def classify_insurability_manual(device):
     
 def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    classify_insurability(device)
+    testloss , testAccuracy = classify_insurability(device,preprocess=True, early_stopping=True)
+    print("For Insurable Data \n Test Loss: ", testloss, "\n Test Accuracy: ", testAccuracy, "\n Preprocessing: True \n Early Stopping: True \n")
+
+    testloss, testAccuracy = classify_insurability(device,preprocess=False, early_stopping=True)
+    print("For Insurable Data \n Test Loss: ", testloss, "\n Test Accuracy: ", testAccuracy, "\n Preprocessing: False \n Early Stopping: True \n")
+
+    testloss, testAccuracy = classify_insurability(device,preprocess=True, early_stopping=False)
+    print("For Insurable Data \n Test Loss: ", testloss, "\n Test Accuracy: ", testAccuracy, "\n Preprocessing: True \n Early Stopping: False \n")
+
+    testloss, testAccuracy = classify_insurability(device,preprocess=False, early_stopping=False)
+    print("For Insurable Data \n Test Loss: ", testloss, "\n Test Accuracy: ", testAccuracy, "\n Preprocessing: False \n Early Stopping: False \n")
+
     #classify_mnist(device)
     #classify_mnist_reg(device)
     #classify_insurability_manual(device)
