@@ -11,6 +11,7 @@ from torch.utils.data import DataLoader, Dataset
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.metrics import confusion_matrix, f1_score
+import grad_scratch
 
 class CustomDataset(Dataset):
     def __init__(self, data):
@@ -480,15 +481,6 @@ def classify_insurability_learning_rate_decay(device):
     # Final evaluation
     return evaluate_model(test_loader, feedForwardNN, loss)
 
-
-def classify_insurability_manual(device):
-    
-    train = read_insurability('three_train.csv')
-    valid = read_insurability('three_valid.csv')
-    test = read_insurability('three_test.csv')
-    
-    # reimplement classify_insurability() without using a PyTorch optimizer.
-    # this part may be simpler without using a class for the FFNN
     
 def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -511,8 +503,7 @@ def main():
     test_loss, acc = classify_mnist_reg(device)
     print("For Mnist Data with Regularization \n Test Loss: ", test_loss, "\n Test Accuracy: ", acc)
 
-    #test_loss, acc = classify_insurability_manual(device)
-    #print("For Insurable Data Manual \n Test Loss: ", test_loss, "\n Test Accuracy: ", acc)
+    grad_scratch.classify_insurability_manual(device,preprocess=True, early_stopping=True)
     
     test_loss, acc = classify_insurability_learning_rate_decay(device)
     print("For Insurable Data with Learning Rate Decay \n Test Loss: ", test_loss, "\n Test Accuracy: ", acc)
