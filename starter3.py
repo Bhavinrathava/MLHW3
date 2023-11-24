@@ -158,8 +158,8 @@ def evaluate_model(testDataset, model,loss_func):
     
     # Calculate F1 Score
     f1 = f1_score(true_labels, predicted_labels, average='weighted')
-    #print(f'F1 Score: {f1}')
-    #print("\n ----------------------------------------- \n")
+    print(f'F1 Score: {f1}')
+    print("\n ----------------------------------------- \n")
     
     # Calculate confusion matrix
     cm = confusion_matrix(true_labels, predicted_labels)
@@ -408,7 +408,7 @@ def classify_mnist_reg(device):
     plt.show()
     plt.show()
 
-    evaluate_model(test_loader, mnistNetModel, loss)
+    return evaluate_model(test_loader, mnistNetModel, loss)
 
 def classify_insurability_learning_rate_decay(device):
 
@@ -478,7 +478,7 @@ def classify_insurability_learning_rate_decay(device):
     plt.show()
 
     # Final evaluation
-    evaluate_model(test_loader, feedForwardNN, loss)
+    return evaluate_model(test_loader, feedForwardNN, loss)
 
 
 def classify_insurability_manual(device):
@@ -508,9 +508,14 @@ def main():
     test_loss, acc = classify_mnist(device)
     print("For Mnist Data \n Test Loss: ", test_loss, "\n Test Accuracy: ", acc)
     
-    classify_mnist_reg(device)
-    classify_insurability_manual(device)
+    test_loss, acc = classify_mnist_reg(device)
+    print("For Mnist Data with Regularization \n Test Loss: ", test_loss, "\n Test Accuracy: ", acc)
+
+    #test_loss, acc = classify_insurability_manual(device)
+    #print("For Insurable Data Manual \n Test Loss: ", test_loss, "\n Test Accuracy: ", acc)
     
-    classify_insurability_learning_rate_decay(device)
+    test_loss, acc = classify_insurability_learning_rate_decay(device)
+    print("For Insurable Data with Learning Rate Decay \n Test Loss: ", test_loss, "\n Test Accuracy: ", acc)
+
 if __name__ == "__main__":
     main()
