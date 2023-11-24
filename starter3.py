@@ -86,8 +86,7 @@ class FFNN(nn.Module):
             x = self.sigmoid1(x)
             x = self.linear2(x)
             x = self.softmax(x)
-            return x
-        
+            return x       
 
 def trainModel(train_loader, model, loss_func, optimizer, device):
   model.train()
@@ -115,7 +114,6 @@ def trainModel(train_loader, model, loss_func, optimizer, device):
       train_loss.append(loss)
 
   return sum(train_loss)/len(train_loss)
-
 
 def testModel(dataset, model, loss_func):
   model.eval()
@@ -173,39 +171,7 @@ def evaluate_model(testDataset, model,loss_func):
     plt.show()
 
     return test_loss, 100. * correct / len(testDataset.dataset)
-
-
-def read_mnist(file_name):
-    
-    data_set = []
-    with open(file_name,'rt') as f:
-        for line in f:
-            line = line.replace('\n','')
-            tokens = line.split(',')
-            label = tokens[0]
-            attribs = []
-            for i in range(784):
-                attribs.append(tokens[i+1])
-            data_set.append([label,attribs])
-    return(data_set)
-        
-def show_mnist(file_name,mode):
-    
-    data_set = read_mnist(file_name)
-    for obs in range(len(data_set)):
-        for idx in range(784):
-            if mode == 'pixels':
-                if data_set[obs][1][idx] == '0':
-                    print(' ',end='')
-                else:
-                    print('*',end='')
-            else:
-                print('%4s ' % data_set[obs][1][idx],end='')
-            if (idx % 28) == 27:
-                print(' ')
-        print('LABEL: %s' % data_set[obs][0],end='')
-        print(' ')
-                   
+                 
 def read_insurability(file_name):
     
     count = 0
@@ -288,6 +254,7 @@ def classify_insurability(device,preprocess=False, early_stopping=True):
 
     return evaluate_model(test_loader, feedForwardNN, loss)
 
+
 class IrisNet(nn.Module):
     def __init__(self):
         super(IrisNet,self).__init__()
@@ -302,14 +269,65 @@ class IrisNet(nn.Module):
         x = F.relu(self.fc2(x))
         x = F.relu(self.fc3(x))
         x = self.fc4(x)
-        return softmax(x)
+        return softmax(x)   
+
+def read_mnist(file_name):
     
+    data_set = []
+    with open(file_name,'rt') as f:
+        for line in f:
+            line = line.replace('\n','')
+            tokens = line.split(',')
+            label = tokens[0]
+            attribs = []
+            for i in range(784):
+                attribs.append(tokens[i+1])
+            data_set.append([label,attribs])
+    return(data_set)
+        
+def processDataMNIST(dataset):
+    labels = []
+    features = []
+
+    for i in range(len(dataset)):
+        label = int(dataset[i][0])
+        grayscale_values = [int(x) for x in dataset[i][1]]
+        
+        # Map grayscale values to binary using a threshold (adjust threshold as needed)
+        threshold = 128  # Example threshold: Change this to suit your needs
+        binary_values = [1 if x > threshold else 0 for x in grayscale_values]
+        
+        features.append(binary_values)
+        labels.append(label)
+
+    return features, labels
+        
+def show_mnist(file_name,mode):
+    
+    data_set = read_mnist(file_name)
+    for obs in range(len(data_set)):
+        for idx in range(784):
+            if mode == 'pixels':
+                if data_set[obs][1][idx] == '0':
+                    print(' ',end='')
+                else:
+                    print('*',end='')
+            else:
+                print('%4s ' % data_set[obs][1][idx],end='')
+            if (idx % 28) == 27:
+                print(' ')
+        print('LABEL: %s' % data_set[obs][0],end='')
+        print(' ')
 
 def classify_mnist(device):
     
     train = read_mnist('mnist_train.csv')
     valid = read_mnist('mnist_valid.csv')
     test = read_mnist('mnist_test.csv')
+
+    train = processDataMNIST('mnist_train.csv')
+    valid = processDataMNIST('mnist_valid.csv')
+    test = processDataMNIST('mnist_test.csv')
 
     train = CustomIrisDataset(train)
     valid = CustomIrisDataset(valid)
@@ -369,7 +387,6 @@ def classify_insurability_manual(device):
     
     # reimplement classify_insurability() without using a PyTorch optimizer.
     # this part may be simpler without using a class for the FFNN
-    
     
 def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
